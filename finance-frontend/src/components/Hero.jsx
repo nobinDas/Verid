@@ -63,8 +63,8 @@ export default function Hero() {
           </a>
         </div>
 
-        {/* Stats row */}
-        <div className="mt-20 grid grid-cols-3 gap-8 max-w-lg mx-auto border-t border-white/5 pt-10">
+        {/* Stats row — hidden until real numbers are available */}
+        {/* <div className="mt-20 grid grid-cols-3 gap-8 max-w-lg mx-auto border-t border-white/5 pt-10">
           {[
             { label: 'Transactions Analyzed', value: '10M+' },
             { label: 'Users', value: '50K+' },
@@ -75,7 +75,7 @@ export default function Hero() {
               <div className="text-white/40 text-xs mt-1">{stat.label}</div>
             </div>
           ))}
-        </div>
+        </div> */}
       </div>
 
       {/* Bottom fade */}
