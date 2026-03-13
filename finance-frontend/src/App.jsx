@@ -1,15 +1,14 @@
-import Navbar from './components/Navbar'
-import Hero from './components/Hero'
-import About from './components/About'
-import Footer from './components/Footer'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import LandingPage from './pages/LandingPage'
+import SignupPage from './pages/SignupPage'
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-[#0a0e1a]">
-      <Navbar />
-      <Hero />
-      <About />
-      <Footer />
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+      </Routes>
+    </BrowserRouter>
   )
 }

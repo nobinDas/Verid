@@ -1,6 +1,8 @@
+import { Link } from 'react-router-dom'
+
 export default function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
 
       {/* Background glow effects */}
       <div className="absolute inset-0 z-0">
@@ -42,12 +44,12 @@ export default function Hero() {
 
         {/* CTA buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <a
-            href="/signup"
+          <Link
+            to="/signup"
             className="bg-brand-600 hover:bg-brand-500 text-white font-semibold px-8 py-3.5 rounded-xl text-base transition-all duration-200 shadow-lg shadow-brand-900/50 hover:shadow-brand-700/40"
           >
             Get Started Free
-          </a>
+          </Link>
           <a
             href="#demo"
             className="flex items-center gap-2 text-white/70 hover:text-white font-medium px-6 py-3.5 rounded-xl border border-white/10 hover:border-white/20 text-base transition-all duration-200 group"
