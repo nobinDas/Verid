@@ -1,13 +1,26 @@
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 export default function Navbar() {
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('user') || 'null')
   const isLoggedIn = !!localStorage.getItem('token') && !!user
+  const [dropOpen, setDropOpen] = useState(false)
+  const dropRef = useRef(null)
+
+  useEffect(() => {
+    if (!dropOpen) return
+    function handleClick(e) {
+      if (dropRef.current && !dropRef.current.contains(e.target)) setDropOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [dropOpen])
 
   function handleLogout() {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    setDropOpen(false)
     navigate('/')
   }
 
@@ -33,28 +46,44 @@ export default function Navbar() {
           </a>
 
           {isLoggedIn ? (
-            <>
-              {/* User avatar + name */}
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/8">
-                <div className="w-6 h-6 rounded-full bg-brand-700/60 flex items-center justify-center text-brand-300 font-semibold text-xs">
-                  {user.name.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-white/70 text-sm font-medium">{user.name.split(' ')[0]}</span>
-              </div>
-
-              <Link
-                to="/dashboard"
-                className="text-white/70 hover:text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-200"
-              >
-                Dashboard
-              </Link>
+            <div className="relative" ref={dropRef}>
+              {/* Avatar button */}
               <button
-                onClick={handleLogout}
-                className="text-white/50 hover:text-red-400 text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-200"
+                onClick={() => setDropOpen((o) => !o)}
+                className="w-9 h-9 rounded-full bg-brand-700/50 hover:bg-brand-700/70 border border-brand-600/30 flex items-center justify-center text-brand-300 font-semibold text-sm transition-colors duration-200"
               >
-                Log Out
+                {user.name.charAt(0).toUpperCase()}
               </button>
-            </>
+
+              {/* Dropdown */}
+              {dropOpen && (
+                <div className="absolute right-0 mt-2 w-44 bg-[#111827] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+                  <div className="px-3 py-2.5 border-b border-white/5">
+                    <p className="text-white text-sm font-medium truncate">{user.name}</p>
+                    <p className="text-white/30 text-xs truncate">{user.email}</p>
+                  </div>
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setDropOpen(false)}
+                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-white/60 hover:text-red-400 hover:bg-red-500/5 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Log Out
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <>
               <Link
