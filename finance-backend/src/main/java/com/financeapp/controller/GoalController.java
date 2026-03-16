@@ -1,6 +1,7 @@
 package com.financeapp.controller;
 
 import com.financeapp.dto.goal.CreateGoalRequest;
+import com.financeapp.dto.goal.DepositRequest;
 import com.financeapp.dto.goal.GoalResponse;
 import com.financeapp.dto.goal.UpdateGoalRequest;
 import com.financeapp.model.User;
@@ -31,6 +32,11 @@ public class GoalController {
         return ResponseEntity.ok(goalService.findAll(currentUserId()));
     }
 
+    @GetMapping("/savings-summary")
+    public ResponseEntity<GoalService.SavingsSummary> getSavingsSummary() {
+        return ResponseEntity.ok(goalService.getSavingsSummary(currentUserId()));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<GoalResponse> getOne(@PathVariable Long id) {
         return ResponseEntity.ok(goalService.findById(currentUserId(), id));
@@ -40,6 +46,12 @@ public class GoalController {
     public ResponseEntity<GoalResponse> update(@PathVariable Long id,
                                                @RequestBody UpdateGoalRequest request) {
         return ResponseEntity.ok(goalService.update(currentUserId(), id, request));
+    }
+
+    @PostMapping("/{id}/deposit")
+    public ResponseEntity<GoalResponse> deposit(@PathVariable Long id,
+                                                @Valid @RequestBody DepositRequest request) {
+        return ResponseEntity.ok(goalService.deposit(currentUserId(), id, request.amount()));
     }
 
     @DeleteMapping("/{id}")

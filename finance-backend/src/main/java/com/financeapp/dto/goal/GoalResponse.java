@@ -20,9 +20,10 @@ public record GoalResponse(
         LocalDate deadline,
         GoalStatus status,
         BigDecimal allocationPercent,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        boolean depositedThisMonth
 ) {
-    public static GoalResponse from(Goal goal) {
+    public static GoalResponse from(Goal goal, boolean depositedThisMonth) {
         BigDecimal progress = BigDecimal.ZERO;
         if (goal.getTargetAmount() != null && goal.getTargetAmount().compareTo(BigDecimal.ZERO) > 0) {
             progress = goal.getCurrentAmount()
@@ -40,7 +41,12 @@ public record GoalResponse(
                 goal.getDeadline(),
                 goal.getStatus(),
                 goal.getAllocationPercent(),
-                goal.getCreatedAt()
+                goal.getCreatedAt(),
+                depositedThisMonth
         );
+    }
+
+    public static GoalResponse from(Goal goal) {
+        return from(goal, false);
     }
 }

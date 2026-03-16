@@ -17,6 +17,12 @@ export async function getGoal(id) {
   return res.json()
 }
 
+export async function getGoalsSavingsSummary() {
+  const res = await fetch(`${BASE}/savings-summary`, { headers: authHeaders() })
+  if (!res.ok) throw new Error('Failed to fetch savings summary')
+  return res.json()
+}
+
 export async function createGoal(data) {
   const res = await fetch(BASE, {
     method: 'POST',
@@ -35,6 +41,17 @@ export async function updateGoal(id, data) {
   })
   if (!res.ok) throw new Error('Failed to update goal')
   return res.json()
+}
+
+export async function depositToGoal(id, amount) {
+  const res = await fetch(`${BASE}/${id}/deposit`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ amount }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || 'Deposit failed')
+  return data
 }
 
 export async function deleteGoal(id) {
