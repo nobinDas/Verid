@@ -38,3 +38,15 @@ export async function getTransactions(id) {
   if (!res.ok) throw new Error('Failed to fetch transactions')
   return res.json()
 }
+
+export async function reviewStatement(id, answers) {
+  const res = await apiFetch(`${BASE}/${id}/review`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(answers),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || 'Review submission failed')
+  }
+}

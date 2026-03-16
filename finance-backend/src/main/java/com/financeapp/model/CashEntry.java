@@ -5,29 +5,22 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "transactions")
+@Table(name = "cash_entries")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Transaction {
-
-    public enum TransactionType { CREDIT, DEBIT }
+public class CashEntry {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(name = "statement_id")
-    private Long statementId;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
@@ -41,17 +34,11 @@ public class Transaction {
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "transaction_type")
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    private TransactionType type;
+    @Column(nullable = false, length = 10)
+    private String type; // "IN" or "OUT"
 
     @Column
     private String category;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private String classification = "UNCLASSIFIED";
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default

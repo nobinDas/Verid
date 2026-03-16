@@ -1,5 +1,6 @@
 package com.financeapp.controller;
 
+import com.financeapp.dto.statement.ReviewAnswer;
 import com.financeapp.dto.statement.StatementResponse;
 import com.financeapp.dto.statement.TransactionResponse;
 import com.financeapp.model.User;
@@ -33,6 +34,12 @@ public class StatementController {
     @PostMapping("/{id}/process")
     public ResponseEntity<StatementResponse> process(@PathVariable Long id) {
         return ResponseEntity.ok(statementService.process(currentUserId(), id));
+    }
+
+    @PostMapping("/{id}/review")
+    public ResponseEntity<Void> review(@PathVariable Long id, @RequestBody List<ReviewAnswer> answers) {
+        statementService.review(currentUserId(), id, answers);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}")

@@ -8,50 +8,32 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "transactions")
+@Table(name = "chat_history")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Transaction {
+public class ChatHistory {
 
-    public enum TransactionType { CREDIT, DEBIT }
+    public enum Role { user, assistant }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "statement_id")
-    private Long statementId;
-
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(nullable = false)
-    private LocalDate date;
-
-    @Column(nullable = false)
-    private String description;
-
-    @Column(nullable = false, precision = 15, scale = 2)
-    private BigDecimal amount;
-
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "transaction_type")
+    @Column(nullable = false, columnDefinition = "chat_role")
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    private TransactionType type;
+    private Role role;
 
-    @Column
-    private String category;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private String classification = "UNCLASSIFIED";
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String message;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
