@@ -6,9 +6,11 @@ import com.financeapp.dto.statement.StatementResponse;
 import com.financeapp.dto.statement.TransactionResponse;
 import com.financeapp.model.BankStatement;
 import com.financeapp.model.MonthlySummary;
+import com.financeapp.model.StatementUploadHistory;
 import com.financeapp.model.Transaction;
 import com.financeapp.repository.BankStatementRepository;
 import com.financeapp.repository.MonthlySummaryRepository;
+import com.financeapp.repository.StatementUploadHistoryRepository;
 import com.financeapp.repository.TransactionRepository;
 import com.financeapp.service.parser.ParsedStatement;
 import com.financeapp.service.parser.ParsedTransaction;
@@ -24,6 +26,7 @@ import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
@@ -34,9 +37,13 @@ public class StatementService {
     private final TransactionRepository transactionRepository;
     private final MonthlySummaryRepository monthlySummaryRepository;
     private final StatementParserService statementParserService;
-    private final CategoryService categoryService;
+    private final AICategoryService aiCategoryService;
     private final TransferDetectionService transferDetectionService;
     private final IncomeClassificationService incomeClassificationService;
+    private final StatementUploadHistoryRepository uploadHistoryRepository;
+
+    private static final DateTimeFormatter HISTORY_FMT =
+            DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a");
 
     public StatementResponse upload(Long userId, MultipartFile file) {
         byte[] bytes;
@@ -56,7 +63,14 @@ public class StatementService {
             throw new RuntimeException("SHA-256 not available", e);
         }
 
-        // Duplicate file check
+        // Check permanent upload history — catches re-uploads of previously deleted statements
+        uploadHistoryRepository.findByUserIdAndFileHash(userId, hash).ifPresent(history -> {
+            String when = history.getUploadedAt().format(HISTORY_FMT);
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This statement was already uploaded on " + when);
+        });
+
+        // Check if currently active (not yet deleted)
         bankStatementRepository.findByUserIdAndFileHash(userId, hash).ifPresent(existing -> {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This statement has already been uploaded");
         });
@@ -97,6 +111,14 @@ public class StatementService {
                 .build();
 
         BankStatement saved = bankStatementRepository.save(statement);
+
+        // Record in permanent upload history
+        uploadHistoryRepository.save(StatementUploadHistory.builder()
+                .userId(userId)
+                .fileHash(hash)
+                .filename(file.getOriginalFilename())
+                .build());
+
         return toResponse(saved, 0L);
     }
 
@@ -130,8 +152,14 @@ public class StatementService {
         Map<String, String>           pendingDesc   = new LinkedHashMap<>();
         Map<String, BigDecimal>       pendingTotal  = new LinkedHashMap<>();
 
+        // Pre-resolve all categories in a single batched AI call (with cache)
+        List<String> allDescriptions = parsed.transactions().stream()
+                .map(ParsedTransaction::description)
+                .toList();
+        Map<String, String> categoryMap = aiCategoryService.categorizeAll(allDescriptions);
+
         for (ParsedTransaction pt : parsed.transactions()) {
-            String category = categoryService.categorize(pt.description());
+            String category = categoryMap.getOrDefault(pt.description(), "Other");
             String classification = classifyTransaction(pt, isCreditCard, userId, statementId);
 
             Transaction tx = Transaction.builder()

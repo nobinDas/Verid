@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import GoalsPage from './pages/GoalsPage'
 import StatementsPage from './pages/StatementsPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import DashboardLayout from './components/DashboardLayout'
@@ -23,6 +24,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="goals" element={<GoalsPage />} />
           <Route path="statements" element={<StatementsPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

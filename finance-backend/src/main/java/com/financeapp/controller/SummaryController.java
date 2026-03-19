@@ -42,7 +42,7 @@ public class SummaryController {
         for (Transaction t : allTx) {
             String cls = t.getClassification();
             if (!INCOME_CLASSIFICATIONS.contains(cls) && !EXPENSE_CLASSIFICATIONS.contains(cls)
-                    && !"EXTRA_IN".equals(cls)) continue;
+                    && !"EXTRA_IN".equals(cls) && !"CC_CHARGE".equals(cls)) continue;
 
             MonthKey key = new MonthKey(t.getDate().getYear(), t.getDate().getMonthValue());
             BigDecimal[] sums = grouped.computeIfAbsent(key, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO});
@@ -50,9 +50,10 @@ public class SummaryController {
                 sums[0] = sums[0].add(t.getAmount());
             } else if (EXPENSE_CLASSIFICATIONS.contains(cls)) {
                 sums[1] = sums[1].add(t.getAmount());
-            } else {
-                sums[2] = sums[2].add(t.getAmount()); // EXTRA_IN
+            } else if ("EXTRA_IN".equals(cls)) {
+                sums[2] = sums[2].add(t.getAmount());
             }
+            // CC_CHARGE: registers the month in the picker without affecting income/expense totals
         }
 
         for (CashEntry c : cashEntries) {

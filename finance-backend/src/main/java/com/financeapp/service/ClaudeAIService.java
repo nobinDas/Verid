@@ -29,8 +29,7 @@ public class ClaudeAIService {
     private final MonthlySummaryRepository summaryRepository;
     private final ChatHistoryRepository chatHistoryRepository;
 
-    private static final String MODEL = "claude-opus-4-6";
-    private static final int MAX_TOKENS = 1024;
+    private static final String MODEL = "gemini-flash-latest";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MMM d, yyyy");
 
     public String chat(Long userId, String userMessage) {
@@ -77,22 +76,29 @@ public class ClaudeAIService {
 
     @SuppressWarnings("unchecked")
     private String callClaude(String systemPrompt, List<Map<String, String>> messages) {
+        // Convert messages to Gemini format (role "assistant" → "model")
+        List<Map<String, Object>> contents = new ArrayList<>();
+        for (Map<String, String> msg : messages) {
+            String role = "assistant".equals(msg.get("role")) ? "model" : "user";
+            contents.add(Map.of("role", role, "parts", List.of(Map.of("text", msg.get("content")))));
+        }
+
         Map<String, Object> body = Map.of(
-                "model", MODEL,
-                "max_tokens", MAX_TOKENS,
-                "system", systemPrompt,
-                "messages", messages
+                "contents", contents,
+                "systemInstruction", Map.of("parts", List.of(Map.of("text", systemPrompt)))
         );
 
         Map<?, ?> response = claudeWebClient.post()
-                .uri("/v1/messages")
+                .uri("/v1beta/models/" + MODEL + ":generateContent")
                 .bodyValue(body)
                 .retrieve()
                 .bodyToMono(Map.class)
                 .block();
 
-        List<Map<String, Object>> content = (List<Map<String, Object>>) response.get("content");
-        return (String) content.get(0).get("text");
+        List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
+        Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
+        List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
+        return (String) parts.get(0).get("text");
     }
 
     private String buildSystemPrompt(Long userId) {
