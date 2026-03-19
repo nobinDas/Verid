@@ -13,11 +13,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 @Service
 @RequiredArgsConstructor
@@ -103,12 +105,21 @@ public class ClaudeAIService {
 
     private String buildSystemPrompt(Long userId) {
         StringBuilder sb = new StringBuilder();
-        sb.append("You are a personal finance assistant. Be concise, helpful, and specific to the user's data.\n\n");
+        sb.append("""
+                You are a personal finance assistant for the Verid app.
+
+                STRICT RULES:
+                - You ONLY answer questions about personal finance: spending, income, savings, budgets, goals, transactions, and financial advice.
+                - If asked about ANYTHING unrelated to finance (sports, weather, coding, general knowledge, etc.), respond EXACTLY: "That's outside my area of expertise. I can only help with questions about your finances, spending, savings, and financial goals."
+                - Be specific to the user's actual data shown below. Do not make up numbers.
+                - Be concise and actionable.
+
+                """);
 
         List<MonthlySummary> summaries = summaryRepository.findByUserIdOrderByYearDescMonthDesc(userId);
         if (!summaries.isEmpty()) {
             sb.append("Monthly Summaries (most recent first):\n");
-            for (MonthlySummary s : summaries.stream().limit(6).toList()) {
+            for (MonthlySummary s : summaries) {
                 sb.append(String.format("- %d/%d: Income $%.2f, Expenses $%.2f, Net $%.2f%n",
                         s.getMonth(), s.getYear(),
                         s.getTotalIncome(), s.getTotalExpenses(), s.getNetSavings()));
@@ -116,9 +127,25 @@ public class ClaudeAIService {
             sb.append("\n");
         }
 
-        List<Transaction> transactions = transactionRepository.findTop30ByUserIdOrderByDateDesc(userId);
+        List<Transaction> transactions = transactionRepository.findTop100ByUserIdOrderByDateDesc(userId);
         if (!transactions.isEmpty()) {
-            sb.append("Recent Transactions (last 30):\n");
+            // Spending by category
+            Map<String, BigDecimal> categoryTotals = new TreeMap<>();
+            for (Transaction t : transactions) {
+                if (t.getType() != null && "debit".equalsIgnoreCase(t.getType().name())) {
+                    String cat = t.getCategory() != null ? t.getCategory() : "Uncategorized";
+                    categoryTotals.merge(cat, t.getAmount(), BigDecimal::add);
+                }
+            }
+            if (!categoryTotals.isEmpty()) {
+                sb.append("Spending by Category (from last 100 transactions):\n");
+                categoryTotals.entrySet().stream()
+                        .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+                        .forEach(e -> sb.append(String.format("- %s: $%.2f%n", e.getKey(), e.getValue())));
+                sb.append("\n");
+            }
+
+            sb.append("Recent Transactions (last 100):\n");
             for (Transaction t : transactions) {
                 sb.append(String.format("- %s: %s $%.2f [%s]%s%n",
                         t.getDate().format(DATE_FMT),

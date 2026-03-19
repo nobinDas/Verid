@@ -10,6 +10,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     List<Transaction> findByStatementIdOrderByDateDesc(Long statementId);
     long countByStatementId(Long statementId);
     List<Transaction> findTop30ByUserIdOrderByDateDesc(Long userId);
+    List<Transaction> findTop100ByUserIdOrderByDateDesc(Long userId);
     List<Transaction> findByUserIdOrderByDateDesc(Long userId);
     List<Transaction> findByUserIdAndDateBetween(Long userId, LocalDate from, LocalDate to);
     List<Transaction> findByUserIdAndClassificationIn(Long userId, List<String> classifications);
