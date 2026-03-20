@@ -1,15 +1,13 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { register } from '../api/auth'
+import { login } from '../api/auth'
 
-export default function SignupPage() {
+export default function LoginPage() {
   const navigate = useNavigate()
 
   const [form, setForm] = useState({
-    name: '',
     email: '',
     password: '',
-    confirmPassword: '',
   })
 
   const [error, setError] = useState('')
@@ -22,21 +20,9 @@ export default function SignupPage() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-
-    if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters')
-      return
-    }
-
     setLoading(true)
     try {
-      const data = await register({
-        name: form.name,
+      const data = await login({
         email: form.email,
         password: form.password,
       })
@@ -69,8 +55,8 @@ export default function SignupPage() {
         {/* Card */}
         <div className="bg-white/[0.04] border border-white/8 rounded-2xl p-8">
 
-          <h1 className="text-white text-2xl font-bold mb-1">Create your account</h1>
-          <p className="text-white/40 text-sm mb-7">Start your journey to financial clarity</p>
+          <h1 className="text-white text-2xl font-bold mb-1">Welcome back</h1>
+          <p className="text-white/40 text-sm mb-7">Log in to your verid account</p>
 
           {/* Error message */}
           {error && (
@@ -80,22 +66,6 @@ export default function SignupPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-
-            {/* Full Name */}
-            <div>
-              <label className="text-white/60 text-sm font-medium block mb-1.5">
-                Full Name
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                placeholder="John Doe"
-                required
-                className="w-full bg-white/[0.05] border border-white/10 focus:border-brand-500 text-white placeholder-white/20 rounded-xl px-4 py-3 text-sm outline-none transition-colors"
-              />
-            </div>
 
             {/* Email */}
             <div>
@@ -123,23 +93,7 @@ export default function SignupPage() {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
-                placeholder="Min. 6 characters"
-                required
-                className="w-full bg-white/[0.05] border border-white/10 focus:border-brand-500 text-white placeholder-white/20 rounded-xl px-4 py-3 text-sm outline-none transition-colors"
-              />
-            </div>
-
-            {/* Confirm Password */}
-            <div>
-              <label className="text-white/60 text-sm font-medium block mb-1.5">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={form.confirmPassword}
-                onChange={handleChange}
-                placeholder="Re-enter your password"
+                placeholder="Enter your password"
                 required
                 className="w-full bg-white/[0.05] border border-white/10 focus:border-brand-500 text-white placeholder-white/20 rounded-xl px-4 py-3 text-sm outline-none transition-colors"
               />
@@ -151,7 +105,7 @@ export default function SignupPage() {
               disabled={loading}
               className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl text-sm transition-colors duration-200 mt-2"
             >
-              {loading ? 'Creating account...' : 'Create Account'}
+              {loading ? 'Logging in...' : 'Log In'}
             </button>
 
           </form>
@@ -159,26 +113,23 @@ export default function SignupPage() {
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">
             <div className="flex-1 h-px bg-white/8" />
-            <span className="text-white/25 text-xs">already have an account?</span>
+            <span className="text-white/25 text-xs">don&apos;t have an account?</span>
             <div className="flex-1 h-px bg-white/8" />
           </div>
 
-          {/* Login link */}
+          {/* Signup link */}
           <Link
-            to="/login"
+            to="/signup"
             className="block w-full text-center border border-white/10 hover:border-white/20 text-white/60 hover:text-white font-medium py-3 rounded-xl text-sm transition-all duration-200"
           >
-            Log In
+            Create Account
           </Link>
 
         </div>
 
         {/* Footer note */}
         <p className="text-white/20 text-xs text-center mt-6">
-          By signing up you agree to our{' '}
-          <a href="#" className="underline hover:text-white/40 transition-colors">Terms</a>{' '}
-          and{' '}
-          <a href="#" className="underline hover:text-white/40 transition-colors">Privacy Policy</a>
+          Your account is protected by secure authentication
         </p>
 
       </div>

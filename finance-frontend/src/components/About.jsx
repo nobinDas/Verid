@@ -51,7 +51,7 @@ const features = [
       </svg>
     ),
     title: 'Private & Secure',
-    desc: 'Your data is yours. All statements and transactions are encrypted and tied only to your account.',
+    desc: 'Your data is yours. All statements and transactions are tied exclusively to your account and protected by authenticated access. Passwords are bcrypt-hashed and never stored in plaintext.',
   },
 ]
 
