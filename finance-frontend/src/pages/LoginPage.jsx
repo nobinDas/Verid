@@ -45,12 +45,12 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
 
         {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
+        <Link to="/" className="flex items-center justify-center gap-2 mb-8">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center">
             <span className="text-white font-black text-base">V</span>
           </div>
           <span className="text-white font-bold text-2xl tracking-tight">verid</span>
-        </div>
+        </Link>
 
         {/* Card */}
         <div className="bg-white/[0.04] border border-white/8 rounded-2xl p-8">
@@ -129,7 +129,7 @@ export default function LoginPage() {
 
         {/* Footer note */}
         <p className="text-white/20 text-xs text-center mt-6">
-          Protected by end-to-end encryption
+          Your account is protected by secure authentication
         </p>
 
       </div>
