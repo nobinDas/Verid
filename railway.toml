@@ -2,9 +2,6 @@
 builder = "nixpacks"
 buildCommand = "cd finance-backend && ./mvnw clean package -DskipTests"
 
-[build.nixpacksPlan.variables]
-JAVA_VERSION = "21"
-
 [deploy]
 startCommand = "java -jar finance-backend/target/*.jar"
 healthcheckPath = "/actuator/health"
