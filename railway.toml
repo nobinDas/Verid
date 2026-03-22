@@ -1,9 +1,8 @@
 [build]
-builder = "nixpacks"
-buildCommand = "cd finance-backend && ./mvnw clean package -DskipTests"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "java -jar finance-backend/target/*.jar"
 healthcheckPath = "/actuator/health"
 healthcheckTimeout = 120
 restartPolicyType = "on_failure"
