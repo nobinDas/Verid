@@ -1,6 +1,6 @@
-import { apiFetch, authHeaders } from './client'
+import { apiFetch, authHeaders, API_BASE } from './client'
 
-const BASE = 'http://localhost:8080/api/cash'
+const BASE = `${API_BASE}/api/cash`
 
 export async function getCashEntries() {
   const res = await apiFetch(BASE, { headers: authHeaders() })

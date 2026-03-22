@@ -1,4 +1,5 @@
-const BASE = 'http://localhost:8080/api/analytics'
+import { API_BASE } from './client'
+const BASE = `${API_BASE}/api/analytics`
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('token')}` }

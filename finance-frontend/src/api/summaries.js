@@ -1,4 +1,5 @@
-const BASE = 'http://localhost:8080/api/summaries'
+import { API_BASE } from './client'
+const BASE = `${API_BASE}/api/summaries`
 
 function authHeaders() {
   const token = localStorage.getItem('token')

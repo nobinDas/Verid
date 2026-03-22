@@ -1,6 +1,6 @@
-import { apiFetch, authHeaders } from './client'
+import { apiFetch, authHeaders, API_BASE } from './client'
 
-const BASE = 'http://localhost:8080/api/statements'
+const BASE = `${API_BASE}/api/statements`
 
 export async function uploadStatement(file) {
   const form = new FormData()

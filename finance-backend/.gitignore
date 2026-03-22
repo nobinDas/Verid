@@ -33,4 +33,4 @@ build/
 .vscode/
 
 ### Secrets ###
-src/main/resources/application.properties
+# application.properties is safe to commit — all secrets now use environment variables

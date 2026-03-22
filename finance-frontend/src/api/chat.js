@@ -1,5 +1,5 @@
-import { apiFetch, authHeaders } from './client'
-const BASE = 'http://localhost:8080/api/chat'
+import { apiFetch, authHeaders, API_BASE } from './client'
+const BASE = `${API_BASE}/api/chat`
 
 export async function sendMessage(message) {
   const res = await apiFetch(BASE, {
