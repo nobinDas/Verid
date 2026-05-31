@@ -42,12 +42,26 @@ function TypingDots() {
   )
 }
 
+function loadMessages() {
+  try {
+    const raw = localStorage.getItem('chat_messages')
+    if (!raw) return []
+    return JSON.parse(raw).map(m => ({ ...m, time: new Date(m.time) }))
+  } catch {
+    return []
+  }
+}
+
 export default function ChatPage() {
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(loadMessages)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
+
+  useEffect(() => {
+    localStorage.setItem('chat_messages', JSON.stringify(messages))
+  }, [messages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

@@ -1,7 +1,9 @@
 package com.financeapp.service;
 
 import com.financeapp.dto.statement.PendingReviewItem;
+import com.financeapp.dto.statement.PendingSheetItem;
 import com.financeapp.dto.statement.ReviewAnswer;
+import com.financeapp.dto.statement.SheetMappingAnswer;
 import com.financeapp.dto.statement.StatementResponse;
 import com.financeapp.dto.statement.TransactionResponse;
 import com.financeapp.model.BankStatement;
@@ -54,6 +56,7 @@ public class StatementService {
 
     private static final Map<String, String> INVESTMENT_PLATFORMS = Map.of(
             "fidelity", "Fidelity",
+            "fid bkg svc", "Fidelity",
             "coinbase", "Coinbase"
     );
 
@@ -219,24 +222,26 @@ public class StatementService {
         bankStatementRepository.save(statement);
 
         // Write to Google Sheets — grouped by month (statements can span multiple months)
+        List<PendingSheetItem> pendingSheetMappings = new ArrayList<>();
         if (googleSheetsService != null) {
             try {
                 List<Transaction> savedTxs = transactionRepository.findByStatementIdOrderByDateDesc(statementId);
-                savedTxs.stream()
-                        .collect(Collectors.groupingBy(t -> t.getDate().getYear() * 100 + t.getDate().getMonthValue()))
-                        .forEach((monthKey, txs) -> {
-                            int yr = monthKey / 100;
-                            int mo = monthKey % 100;
-                            String result = googleSheetsService.writeTransactionsForMonth(txs, mo, yr);
-                            log.info("Google Sheets: {}", result);
-                        });
+                Map<Integer, List<Transaction>> byMonth = savedTxs.stream()
+                        .collect(Collectors.groupingBy(t -> t.getDate().getYear() * 100 + t.getDate().getMonthValue()));
+                for (Map.Entry<Integer, List<Transaction>> entry : byMonth.entrySet()) {
+                    int yr = entry.getKey() / 100;
+                    int mo = entry.getKey() % 100;
+                    GoogleSheetsService.WriteResult result = googleSheetsService.writeTransactionsForMonth(entry.getValue(), mo, yr);
+                    log.info("Google Sheets: {}", result.summary());
+                    pendingSheetMappings.addAll(result.unmapped());
+                }
             } catch (Exception e) {
                 log.warn("Google Sheets sync failed (statement still processed): {}", e.getMessage());
             }
         }
 
         long count = transactionRepository.countByStatementId(statementId);
-        return toResponseWithReviews(statement, count, pendingReviews);
+        return toResponseWithReviews(statement, count, pendingReviews, pendingSheetMappings);
     }
 
     @Transactional
@@ -388,7 +393,8 @@ public class StatementService {
     }
 
     private StatementResponse toResponseWithReviews(BankStatement s, long count,
-                                                     List<PendingReviewItem> pendingReviews) {
+                                                     List<PendingReviewItem> pendingReviews,
+                                                     List<PendingSheetItem> pendingSheetMappings) {
         return new StatementResponse(
                 s.getId(),
                 s.getFilename(),
@@ -400,8 +406,44 @@ public class StatementService {
                 s.isProcessed(),
                 count,
                 s.getUploadDate(),
-                pendingReviews
+                pendingReviews,
+                pendingSheetMappings
         );
+    }
+
+    public void sheetReview(Long userId, Long statementId, List<SheetMappingAnswer> answers) {
+        bankStatementRepository.findByIdAndUserId(statementId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Statement not found"));
+
+        if (googleSheetsService == null || answers == null || answers.isEmpty()) return;
+
+        List<Long> allIds = answers.stream()
+                .flatMap(a -> a.transactionIds().stream())
+                .distinct().toList();
+
+        Map<Long, Transaction> txById = new HashMap<>();
+        transactionRepository.findAllById(allIds).forEach(tx -> txById.put(tx.getId(), tx));
+
+        // Group answers by month based on representative transaction date
+        Map<Integer, List<SheetMappingAnswer>> byMonth = new LinkedHashMap<>();
+        for (SheetMappingAnswer answer : answers) {
+            Transaction repTx = answer.transactionIds().stream()
+                    .map(txById::get).filter(Objects::nonNull).findFirst().orElse(null);
+            if (repTx == null) continue;
+            int key = repTx.getDate().getYear() * 100 + repTx.getDate().getMonthValue();
+            byMonth.computeIfAbsent(key, k -> new ArrayList<>()).add(answer);
+        }
+
+        for (Map.Entry<Integer, List<SheetMappingAnswer>> entry : byMonth.entrySet()) {
+            int yr = entry.getKey() / 100;
+            int mo = entry.getKey() % 100;
+            try {
+                googleSheetsService.writeReviewedTransactions(mo, yr, entry.getValue(), txById);
+                log.info("Sheet review written for {}/{}", mo, yr);
+            } catch (Exception e) {
+                log.warn("Sheet review write failed for {}/{}: {}", mo, yr, e.getMessage());
+            }
+        }
     }
 
     private TransactionResponse toTxResponse(Transaction t) {

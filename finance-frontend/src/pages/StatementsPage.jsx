@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { deleteStatement, getStatements, getTransactions, processStatement, reviewStatement, uploadStatement } from '../api/statements'
+import { deleteStatement, getStatements, getTransactions, processStatement, reviewStatement, sheetReviewStatement, uploadStatement } from '../api/statements'
 import { createCashEntry, deleteCashEntry, getCashEntries } from '../api/cash'
 
 const BANK_DISPLAY  = { CAPITAL_ONE: 'Capital One', REGIONS: 'Regions' }
@@ -33,10 +33,15 @@ export default function StatementsPage() {
   const [transactions, setTransactions]     = useState({})
   const [loadingTx, setLoadingTx]           = useState(null)
   const [processingId, setProcessingId]     = useState(null)
-  // Review modal
-  const [reviewModal, setReviewModal]       = useState(null) // { statementId, items }
-  const [reviewAnswers, setReviewAnswers]   = useState({})  // transactionId → true/false/null
-  const [submittingReview, setSubmittingReview] = useState(false)
+  // Income review modal
+  const [reviewModal, setReviewModal]             = useState(null) // { statementId, items }
+  const [reviewAnswers, setReviewAnswers]         = useState({})
+  const [submittingReview, setSubmittingReview]   = useState(false)
+  // Sheet mapping modal
+  const [sheetModal, setSheetModal]               = useState(null) // { statementId, items }
+  const [pendingSheetModal, setPendingSheetModal] = useState(null) // queued until income review done
+  const [sheetAnswers, setSheetAnswers]           = useState({})   // idx → { section, categoryName }
+  const [submittingSheet, setSubmittingSheet]     = useState(false)
   // Cash modal
   const [showCashModal, setShowCashModal]   = useState(false)
   const [cashEntries, setCashEntries]       = useState([])
@@ -100,11 +105,17 @@ export default function StatementsPage() {
       setExpandedId(id)
 
       if (updated.pendingReviews && updated.pendingReviews.length > 0) {
-        // Key by index since each item is already a deduplicated group
         const initialAnswers = {}
         updated.pendingReviews.forEach((_, i) => { initialAnswers[i] = null })
         setReviewAnswers(initialAnswers)
         setReviewModal({ statementId: id, items: updated.pendingReviews })
+        // Queue sheet modal to appear after income review
+        if (updated.pendingSheetMappings?.length > 0) {
+          setPendingSheetModal({ statementId: id, items: updated.pendingSheetMappings })
+        }
+      } else if (updated.pendingSheetMappings?.length > 0) {
+        setSheetModal({ statementId: id, items: updated.pendingSheetMappings })
+        setSheetAnswers({})
       }
     } catch (err) {
       alert(err.message || 'Processing failed')
@@ -126,14 +137,44 @@ export default function StatementsPage() {
     setSubmittingReview(true)
     try {
       await reviewStatement(reviewModal.statementId, answers)
+      await loadTransactionsFor(reviewModal.statementId)
       setReviewModal(null)
       setReviewAnswers({})
-      // Refresh transactions for that statement
-      await loadTransactionsFor(reviewModal.statementId)
+      // Show sheet mapping modal if queued
+      if (pendingSheetModal) {
+        setSheetModal(pendingSheetModal)
+        setSheetAnswers({})
+        setPendingSheetModal(null)
+      }
     } catch (err) {
       alert(err.message || 'Failed to submit review')
     } finally {
       setSubmittingReview(false)
+    }
+  }
+
+  // ── Sheet mapping modal ───────────────────────────────────────────────────
+  async function handleSheetSubmit() {
+    if (!sheetModal) return
+    const answers = Object.entries(sheetAnswers)
+      .filter(([, v]) => v?.section && v?.categoryName)
+      .map(([idx, { section, categoryName }]) => ({
+        transactionIds: sheetModal.items[Number(idx)].transactionIds,
+        section,
+        categoryName,
+      }))
+
+    if (answers.length === 0) { setSheetModal(null); return }
+
+    setSubmittingSheet(true)
+    try {
+      await sheetReviewStatement(sheetModal.statementId, answers)
+      setSheetModal(null)
+      setSheetAnswers({})
+    } catch (err) {
+      alert(err.message || 'Failed to submit sheet mapping')
+    } finally {
+      setSubmittingSheet(false)
     }
   }
 
@@ -399,7 +440,15 @@ export default function StatementsPage() {
               </p>
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setReviewModal(null); setReviewAnswers({}) }}
+                  onClick={() => {
+                    setReviewModal(null)
+                    setReviewAnswers({})
+                    if (pendingSheetModal) {
+                      setSheetModal(pendingSheetModal)
+                      setSheetAnswers({})
+                      setPendingSheetModal(null)
+                    }
+                  }}
                   className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white/50 hover:text-white/70 text-sm transition-colors"
                 >
                   Skip
@@ -420,6 +469,18 @@ export default function StatementsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Sheet Mapping Modal ──────────────────────────────────────────── */}
+      {sheetModal && (
+        <SheetMappingModal
+          items={sheetModal.items}
+          answers={sheetAnswers}
+          setAnswers={setSheetAnswers}
+          onSubmit={handleSheetSubmit}
+          onSkip={() => { setSheetModal(null); setSheetAnswers({}) }}
+          submitting={submittingSheet}
+        />
       )}
 
       {/* ── Cash Entry Modal ─────────────────────────────────────────────── */}
@@ -527,6 +588,131 @@ export default function StatementsPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Sheet section / category hierarchy (must match sheets-skill.md exactly) ──
+const SHEET_SECTIONS = {
+  'INCOME':             ['Gross Pay (Before Tax)', 'Federal Income Tax', 'NJ State Income Tax',
+                         'NJ SDI (Disability Ins.)', 'NJ FLI (Family Leave Ins.)', 'NJ SUI (Unemployment Ins.)',
+                         'Social Security (OASDI)', 'Medicare', 'Other Pre-Tax Deductions', 'Other Incomes'],
+  'HOUSING & RENT':     ['Rent / Mortgage', 'HOA Fees', "Renter's Insurance"],
+  'UTILITIES':          ['Electric', 'Gas / Heat', 'Water', 'Internet', 'Phone / Mobile'],
+  'INSURANCE':          ['Health Insurance (Premium)', 'Dental Insurance', 'Vision Insurance', 'Auto Insurance', 'Life Insurance'],
+  'TRANSPORTATION':     ['Car Payment', 'Gas / Fuel / Rides', 'Parking & Tolls', 'Car Maintenance'],
+  'FOOD & DINING':      ['Groceries', 'Dining / Restaurants', 'Coffee'],
+  'HEALTH & WELLNESS':  ['Doctor / Co-pays', 'Pharmacy / Prescriptions', 'Gym Membership'],
+  'DEBT PAYMENTS':      ['Student Loans', 'Credit Card (Min. Payment)', 'Personal Loan'],
+  'PERSONAL & LIFESTYLE': ['Clothing', 'Entertainment', 'Subscriptions', 'Personal Care / Grooming'],
+  'MISCELLANEOUS':      ['Emergency / Unexpected', 'Gifts & Donations', 'Other'],
+  'INVESTMENTS & SAVINGS': ['Cryptocurrency', 'Stocks', 'Other Investments'],
+}
+
+function SheetMappingModal({ items, answers, setAnswers, onSubmit, onSkip, submitting }) {
+  const answered = Object.values(answers).filter(v => v?.section && v?.categoryName).length
+
+  function setSection(idx, section) {
+    setAnswers(prev => ({ ...prev, [idx]: { section, categoryName: '' } }))
+  }
+  function setCategory(idx, categoryName) {
+    setAnswers(prev => ({ ...prev, [idx]: { ...prev[idx], categoryName } }))
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-[#111] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl">
+        <div className="px-6 pt-6 pb-4 border-b border-white/5">
+          <h2 className="text-white font-semibold text-lg">Where do these go in your sheet?</h2>
+          <p className="text-white/40 text-sm mt-1">
+            {items.length} transaction{items.length !== 1 ? 's' : ''} couldn't be auto-placed.
+            Select the section and category for each.
+          </p>
+        </div>
+
+        <div className="px-6 py-4 max-h-[52vh] overflow-y-auto space-y-4">
+          {items.map((item, idx) => {
+            const ans = answers[idx] || {}
+            const categories = ans.section ? SHEET_SECTIONS[ans.section] || [] : []
+            return (
+              <div key={idx} className="bg-white/[0.03] border border-white/5 rounded-xl p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-white/80 text-sm truncate" title={item.description}>{item.description}</p>
+                    <p className="text-white/30 text-xs mt-0.5">AI category: {item.aiCategory}</p>
+                  </div>
+                  <span className="text-red-400 text-sm font-medium tabular-nums shrink-0">
+                    -${Number(item.totalAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Section dropdown */}
+                  <div>
+                    <label className="block text-white/40 text-xs mb-1">Section</label>
+                    <select
+                      value={ans.section || ''}
+                      onChange={e => setSection(idx, e.target.value)}
+                      className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-2 text-white text-xs focus:outline-none focus:border-brand-500/50 transition-colors [color-scheme:dark]"
+                    >
+                      <option value="">— Pick section —</option>
+                      {Object.keys(SHEET_SECTIONS).map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Category dropdown */}
+                  <div>
+                    <label className="block text-white/40 text-xs mb-1">Category</label>
+                    <select
+                      value={ans.categoryName || ''}
+                      onChange={e => setCategory(idx, e.target.value)}
+                      disabled={!ans.section}
+                      className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-2 text-white text-xs focus:outline-none focus:border-brand-500/50 transition-colors disabled:opacity-40 [color-scheme:dark]"
+                    >
+                      <option value="">— Pick category —</option>
+                      {categories.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {ans.section && ans.categoryName && (
+                  <p className="text-brand-400/60 text-xs">
+                    Will be saved — won't ask again for similar transactions.
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="px-6 pt-4 pb-6 border-t border-white/5 flex items-center justify-between gap-3">
+          <p className="text-white/30 text-xs">{answered} of {items.length} mapped</p>
+          <div className="flex gap-2">
+            <button
+              onClick={onSkip}
+              className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white/50 hover:text-white/70 text-sm transition-colors"
+            >
+              Skip
+            </button>
+            <button
+              onClick={onSubmit}
+              disabled={submitting || answered === 0}
+              className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white text-sm font-medium transition-colors"
+            >
+              {submitting ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 border border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving…
+                </span>
+              ) : `Save ${answered > 0 ? answered : ''} Mapping${answered !== 1 ? 's' : ''}`}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

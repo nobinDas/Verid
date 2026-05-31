@@ -50,3 +50,15 @@ export async function reviewStatement(id, answers) {
     throw new Error(err.message || 'Review submission failed')
   }
 }
+
+export async function sheetReviewStatement(id, answers) {
+  const res = await apiFetch(`${BASE}/${id}/sheet-review`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(answers),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || 'Sheet review submission failed')
+  }
+}

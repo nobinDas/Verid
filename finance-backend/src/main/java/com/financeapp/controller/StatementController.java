@@ -1,6 +1,7 @@
 package com.financeapp.controller;
 
 import com.financeapp.dto.statement.ReviewAnswer;
+import com.financeapp.dto.statement.SheetMappingAnswer;
 import com.financeapp.dto.statement.StatementResponse;
 import com.financeapp.dto.statement.TransactionResponse;
 import com.financeapp.model.User;
@@ -39,6 +40,12 @@ public class StatementController {
     @PostMapping("/{id}/review")
     public ResponseEntity<Void> review(@PathVariable Long id, @RequestBody List<ReviewAnswer> answers) {
         statementService.review(currentUserId(), id, answers);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/sheet-review")
+    public ResponseEntity<Void> sheetReview(@PathVariable Long id, @RequestBody List<SheetMappingAnswer> answers) {
+        statementService.sheetReview(currentUserId(), id, answers);
         return ResponseEntity.noContent().build();
     }
 
