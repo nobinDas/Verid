@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AICategoryService {
 
-    private final WebClient claudeWebClient;
+    private final WebClient geminiWebClient;
     private final MerchantCategoryRepository merchantCategoryRepository;
     private final CategoryRepository categoryRepository;
 
@@ -32,10 +32,8 @@ public class AICategoryService {
             return Collections.emptyMap();
         }
 
-        // Deduplicate while preserving all original descriptions
         List<String> unique = descriptions.stream().distinct().toList();
 
-        // Normalize each description to a merchant key
         Map<String, String> descToKey = new LinkedHashMap<>();
         for (String desc : unique) {
             descToKey.put(desc, normalizeMerchantKey(desc));
@@ -43,12 +41,10 @@ public class AICategoryService {
 
         List<String> allKeys = new ArrayList<>(descToKey.values());
 
-        // Batch-load cache
         List<MerchantCategory> cached = merchantCategoryRepository.findAllByMerchantKeyIn(allKeys);
         Map<String, String> keyToCategory = cached.stream()
                 .collect(Collectors.toMap(MerchantCategory::getMerchantKey, MerchantCategory::getCategory));
 
-        // Split into cached vs uncached
         List<String> uncachedDescs = new ArrayList<>();
         for (String desc : unique) {
             String key = descToKey.get(desc);
@@ -57,10 +53,9 @@ public class AICategoryService {
             }
         }
 
-        // Call Gemini for uncached descriptions
         if (!uncachedDescs.isEmpty()) {
             try {
-                Map<String, String> aiResults = callClaudeForCategories(uncachedDescs);
+                Map<String, String> aiResults = callGeminiForCategories(uncachedDescs);
                 Set<String> savedInBatch = new HashSet<>();
                 for (Map.Entry<String, String> entry : aiResults.entrySet()) {
                     String desc = entry.getKey();
@@ -70,7 +65,6 @@ public class AICategoryService {
 
                     keyToCategory.put(key, category);
 
-                    // Skip if another description in this batch already saved this key
                     if (savedInBatch.contains(key)) continue;
                     savedInBatch.add(key);
 
@@ -95,7 +89,6 @@ public class AICategoryService {
             }
         }
 
-        // Build result map for all original descriptions
         Map<String, String> result = new LinkedHashMap<>();
         for (String desc : descriptions) {
             String key = descToKey.get(desc);
@@ -106,14 +99,14 @@ public class AICategoryService {
 
     private String normalizeMerchantKey(String desc) {
         return desc.toLowerCase()
-                .replaceAll("\\s*#?\\d+\\s*", " ")  // remove reference numbers
-                .replaceAll("[^a-z\\s]", " ")        // keep only letters/spaces
+                .replaceAll("\\s*#?\\d+\\s*", " ")
+                .replaceAll("[^a-z\\s]", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, String> callClaudeForCategories(List<String> descriptions) throws Exception {
+    private Map<String, String> callGeminiForCategories(List<String> descriptions) throws Exception {
         String prompt = buildCategorizationPrompt(descriptions);
 
         Map<String, Object> body = Map.of(
@@ -126,7 +119,7 @@ public class AICategoryService {
                 )
         );
 
-        Map<?, ?> response = claudeWebClient.post()
+        Map<?, ?> response = geminiWebClient.post()
                 .uri("/v1beta/models/" + MODEL + ":generateContent")
                 .bodyValue(body)
                 .retrieve()
@@ -138,7 +131,7 @@ public class AICategoryService {
         List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
         String text = (String) parts.get(0).get("text");
 
-        return parseClaudeResponse(text, descriptions);
+        return parseGeminiResponse(text, descriptions);
     }
 
     private String buildCategorizationPrompt(List<String> descriptions) {
@@ -159,10 +152,9 @@ public class AICategoryService {
         return sb.toString();
     }
 
-    private Map<String, String> parseClaudeResponse(String text, List<String> descriptions) {
+    private Map<String, String> parseGeminiResponse(String text, List<String> descriptions) {
         Map<String, String> result = new LinkedHashMap<>();
 
-        // Strip possible markdown fences
         String cleaned = text.strip();
         if (cleaned.startsWith("```")) {
             cleaned = cleaned.replaceAll("^```[a-z]*\\s*", "").replaceAll("```\\s*$", "").strip();
@@ -180,10 +172,9 @@ public class AICategoryService {
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to parse Claude response as JSON: {}", e.getMessage());
+            log.warn("Failed to parse Gemini response as JSON: {}", e.getMessage());
         }
 
-        // Fill missing descriptions with "Other"
         for (String desc : descriptions) {
             result.putIfAbsent(desc, "Other");
         }

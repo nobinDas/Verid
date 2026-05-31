@@ -15,6 +15,8 @@ import com.financeapp.repository.TransactionRepository;
 import com.financeapp.service.parser.ParsedStatement;
 import com.financeapp.service.parser.ParsedTransaction;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,9 +30,11 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class StatementService {
 
     private final BankStatementRepository bankStatementRepository;
@@ -41,6 +45,9 @@ public class StatementService {
     private final TransferDetectionService transferDetectionService;
     private final IncomeClassificationService incomeClassificationService;
     private final StatementUploadHistoryRepository uploadHistoryRepository;
+
+    @Autowired(required = false)
+    private GoogleSheetsService googleSheetsService;
 
     private static final DateTimeFormatter HISTORY_FMT =
             DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a");
@@ -201,6 +208,23 @@ public class StatementService {
         statement.setProcessed(true);
         statement.setFileData(null);
         bankStatementRepository.save(statement);
+
+        // Write to Google Sheets — grouped by month (statements can span multiple months)
+        if (googleSheetsService != null) {
+            try {
+                List<Transaction> savedTxs = transactionRepository.findByStatementIdOrderByDateDesc(statementId);
+                savedTxs.stream()
+                        .collect(Collectors.groupingBy(t -> t.getDate().getYear() * 100 + t.getDate().getMonthValue()))
+                        .forEach((monthKey, txs) -> {
+                            int yr = monthKey / 100;
+                            int mo = monthKey % 100;
+                            String result = googleSheetsService.writeTransactionsForMonth(txs, mo, yr);
+                            log.info("Google Sheets: {}", result);
+                        });
+            } catch (Exception e) {
+                log.warn("Google Sheets sync failed (statement still processed): {}", e.getMessage());
+            }
+        }
 
         long count = transactionRepository.countByStatementId(statementId);
         return toResponseWithReviews(statement, count, pendingReviews);

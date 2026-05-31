@@ -25,7 +25,7 @@ import java.util.TreeMap;
 @RequiredArgsConstructor
 public class ClaudeAIService {
 
-    private final WebClient claudeWebClient;
+    private final WebClient geminiWebClient;
     private final TransactionRepository transactionRepository;
     private final GoalRepository goalRepository;
     private final MonthlySummaryRepository summaryRepository;
@@ -35,38 +35,32 @@ public class ClaudeAIService {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MMM d, yyyy");
 
     public String chat(Long userId, String userMessage) {
-        // Fetch history before saving new message (so we don't include the current turn)
         List<ChatHistory> history = chatHistoryRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId);
         Collections.reverse(history);
 
-        // Save user message
         chatHistoryRepository.save(ChatHistory.builder()
                 .userId(userId)
                 .role(ChatHistory.Role.user)
                 .message(userMessage)
                 .build());
 
-        // Build messages list from history + new user message
         List<Map<String, String>> messages = new ArrayList<>();
         for (ChatHistory h : history) {
             messages.add(Map.of("role", h.getRole().name(), "content", h.getMessage()));
         }
         messages.add(Map.of("role", "user", "content", userMessage));
 
-        // Build financial context system prompt
         String systemPrompt = buildSystemPrompt(userId);
 
-        // Call Claude API
         String assistantMessage;
         try {
-            assistantMessage = callClaude(systemPrompt, messages);
+            assistantMessage = callGemini(systemPrompt, messages);
         } catch (WebClientResponseException e) {
             assistantMessage = "I'm having trouble connecting to the AI service. Please check your API key configuration.";
         } catch (Exception e) {
             assistantMessage = "An error occurred while processing your request. Please try again.";
         }
 
-        // Save assistant response
         chatHistoryRepository.save(ChatHistory.builder()
                 .userId(userId)
                 .role(ChatHistory.Role.assistant)
@@ -77,8 +71,7 @@ public class ClaudeAIService {
     }
 
     @SuppressWarnings("unchecked")
-    private String callClaude(String systemPrompt, List<Map<String, String>> messages) {
-        // Convert messages to Gemini format (role "assistant" → "model")
+    private String callGemini(String systemPrompt, List<Map<String, String>> messages) {
         List<Map<String, Object>> contents = new ArrayList<>();
         for (Map<String, String> msg : messages) {
             String role = "assistant".equals(msg.get("role")) ? "model" : "user";
@@ -90,7 +83,7 @@ public class ClaudeAIService {
                 "systemInstruction", Map.of("parts", List.of(Map.of("text", systemPrompt)))
         );
 
-        Map<?, ?> response = claudeWebClient.post()
+        Map<?, ?> response = geminiWebClient.post()
                 .uri("/v1beta/models/" + MODEL + ":generateContent")
                 .bodyValue(body)
                 .retrieve()
@@ -129,7 +122,6 @@ public class ClaudeAIService {
 
         List<Transaction> transactions = transactionRepository.findTop100ByUserIdOrderByDateDesc(userId);
         if (!transactions.isEmpty()) {
-            // Spending by category
             Map<String, BigDecimal> categoryTotals = new TreeMap<>();
             for (Transaction t : transactions) {
                 if (t.getType() != null && "debit".equalsIgnoreCase(t.getType().name())) {
