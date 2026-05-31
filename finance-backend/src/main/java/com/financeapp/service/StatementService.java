@@ -9,6 +9,7 @@ import com.financeapp.model.MonthlySummary;
 import com.financeapp.model.StatementUploadHistory;
 import com.financeapp.model.Transaction;
 import com.financeapp.repository.BankStatementRepository;
+import com.financeapp.repository.InvestmentRepository;
 import com.financeapp.repository.MonthlySummaryRepository;
 import com.financeapp.repository.StatementUploadHistoryRepository;
 import com.financeapp.repository.TransactionRepository;
@@ -45,9 +46,16 @@ public class StatementService {
     private final TransferDetectionService transferDetectionService;
     private final IncomeClassificationService incomeClassificationService;
     private final StatementUploadHistoryRepository uploadHistoryRepository;
+    private final InvestmentService investmentService;
+    private final InvestmentRepository investmentRepository;
 
     @Autowired(required = false)
     private GoogleSheetsService googleSheetsService;
+
+    private static final Map<String, String> INVESTMENT_PLATFORMS = Map.of(
+            "fidelity", "Fidelity",
+            "coinbase", "Coinbase"
+    );
 
     private static final DateTimeFormatter HISTORY_FMT =
             DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a");
@@ -181,6 +189,7 @@ public class StatementService {
                     .createdAt(LocalDateTime.now())
                     .build();
             Transaction saved = transactionRepository.save(tx);
+            detectAndSaveInvestment(userId, saved);
 
             if ("UNCLASSIFIED".equals(classification)) {
                 String pattern = IncomeClassificationService.normalize(pt.description());
@@ -277,6 +286,18 @@ public class StatementService {
         return transactionRepository.findByStatementIdOrderByDateDesc(statementId).stream()
                 .map(this::toTxResponse)
                 .toList();
+    }
+
+    // ── Investment detection ──────────────────────────────────────────────────
+
+    private void detectAndSaveInvestment(Long userId, Transaction tx) {
+        if (tx.getType() != Transaction.TransactionType.DEBIT) return;
+        String desc = tx.getDescription().toLowerCase();
+        INVESTMENT_PLATFORMS.forEach((keyword, platform) -> {
+            if (desc.contains(keyword) && !investmentRepository.existsByTransactionId(tx.getId())) {
+                investmentService.createFromTransaction(userId, tx, platform);
+            }
+        });
     }
 
     // ── Classification logic ──────────────────────────────────────────────────
