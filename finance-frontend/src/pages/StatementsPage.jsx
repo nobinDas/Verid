@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { deleteStatement, getStatements, getTransactions, processStatement, reviewStatement, sheetReviewStatement, uploadStatement } from '../api/statements'
 import { createCashEntry, deleteCashEntry, getCashEntries } from '../api/cash'
+import { deleteReceipt, getReceipts, uploadReceipt } from '../api/receipts'
 
 const BANK_DISPLAY  = { CAPITAL_ONE: 'Capital One', REGIONS: 'Regions' }
 const TYPE_COLORS   = {
@@ -47,9 +48,62 @@ export default function StatementsPage() {
   const [cashEntries, setCashEntries]       = useState([])
   const [cashForm, setCashForm]             = useState({ date: '', description: '', amount: '', type: 'IN', category: '' })
   const [savingCash, setSavingCash]         = useState(false)
-  const fileInputRef = useRef(null)
+  // Receipt modal
+  const [receiptModal, setReceiptModal]     = useState(false)
+  const [receiptTab, setReceiptTab]         = useState('upload')
+  const [receipts, setReceipts]             = useState([])
+  const [receiptFile, setReceiptFile]       = useState(null)
+  const [receiptPreview, setReceiptPreview] = useState(null)
+  const [retentionYears, setRetentionYears] = useState(1)
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
+  const [expandedReceipt, setExpandedReceipt]   = useState(null)
+  const fileInputRef    = useRef(null)
+  const cameraInputRef  = useRef(null)
+  const imageInputRef   = useRef(null)
 
   useEffect(() => { loadStatements(); loadCashEntries() }, [])
+
+  async function loadReceipts() {
+    try { setReceipts(await getReceipts()) } catch { /* silent */ }
+  }
+
+  function pickReceiptFile(file) {
+    setReceiptFile(file)
+    setReceiptPreview(URL.createObjectURL(file))
+  }
+
+  async function handleReceiptUpload() {
+    if (!receiptFile) return
+    setUploadingReceipt(true)
+    try {
+      const saved = await uploadReceipt(receiptFile, retentionYears)
+      setReceipts(prev => [saved, ...prev])
+      setReceiptFile(null)
+      setReceiptPreview(null)
+      setRetentionYears(1)
+      setReceiptTab('saved')
+    } catch (err) {
+      alert(err.message || 'Upload failed')
+    } finally {
+      setUploadingReceipt(false)
+    }
+  }
+
+  async function handleDeleteReceipt(id) {
+    try {
+      await deleteReceipt(id)
+      setReceipts(prev => prev.filter(r => r.id !== id))
+      if (expandedReceipt === id) setExpandedReceipt(null)
+    } catch { /* silent */ }
+  }
+
+  function openReceiptModal() {
+    setReceiptModal(true)
+    setReceiptTab('upload')
+    setReceiptFile(null)
+    setReceiptPreview(null)
+    loadReceipts()
+  }
 
   async function loadStatements() {
     try {
@@ -242,15 +296,27 @@ export default function StatementsPage() {
           <h1 className="text-white text-2xl font-bold">Statements</h1>
           <p className="text-white/40 text-sm mt-1">Upload and process your bank statements</p>
         </div>
-        <button
-          onClick={() => setShowCashModal(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white/60 hover:text-white/80 text-sm transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 4v16m8-8H4" />
-          </svg>
-          Record Cash
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openReceiptModal}
+            title="Receipts"
+            className="p-2 rounded-xl bg-white/[0.04] border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/[0.06] transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setShowCashModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white/60 hover:text-white/80 text-sm transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 4v16m8-8H4" />
+            </svg>
+            Record Cash
+          </button>
+        </div>
       </div>
 
       {/* Upload zone */}
@@ -584,6 +650,149 @@ export default function StatementsPage() {
                   </span>
                 ) : 'Save'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden file inputs for receipt */}
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={e => { if (e.target.files[0]) pickReceiptFile(e.target.files[0]) }} />
+      <input ref={imageInputRef} type="file" accept="image/*" className="hidden"
+        onChange={e => { if (e.target.files[0]) pickReceiptFile(e.target.files[0]) }} />
+
+      {/* ── Receipt Modal ─────────────────────────────────────────────── */}
+      {receiptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#111] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
+            <div className="px-6 pt-5 pb-0 border-b border-white/5 shrink-0">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-white font-semibold text-lg">Receipts</h2>
+                <button onClick={() => setReceiptModal(false)} className="text-white/30 hover:text-white/60 transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex gap-1">
+                {['upload', 'saved'].map(tab => (
+                  <button key={tab}
+                    onClick={() => { setReceiptTab(tab); if (tab === 'saved') loadReceipts() }}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${receiptTab === tab ? 'text-white border-brand-500' : 'text-white/40 border-transparent hover:text-white/60'}`}>
+                    {tab === 'upload' ? 'Upload' : 'Saved Receipts'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              {receiptTab === 'upload' ? (
+                <div className="space-y-5">
+                  {!receiptFile ? (
+                    <div className="flex gap-3">
+                      <button onClick={() => cameraInputRef.current?.click()}
+                        className="flex-1 flex flex-col items-center gap-2 py-5 rounded-xl bg-white/[0.04] border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-colors">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="text-xs font-medium">Take Photo</span>
+                      </button>
+                      <button onClick={() => imageInputRef.current?.click()}
+                        className="flex-1 flex flex-col items-center gap-2 py-5 rounded-xl bg-white/[0.04] border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-colors">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        <span className="text-xs font-medium">Upload Image</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3">
+                      <img src={receiptPreview} alt="Receipt preview" className="max-h-36 rounded-xl object-contain border border-white/10" />
+                      <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2">
+                        <span className="text-white/70 text-xs">{receiptFile.name}</span>
+                        <button onClick={() => { setReceiptFile(null); setReceiptPreview(null) }} className="text-white/30 hover:text-white/60 ml-1">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-white/40 text-xs mb-2">Keep receipt for:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[1, 2, 3, 5, 10].map(y => (
+                        <button key={y} onClick={() => setRetentionYears(y)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${retentionYears === y ? 'bg-brand-600/20 border-brand-500/40 text-brand-400' : 'bg-white/[0.04] border-white/10 text-white/50 hover:text-white/70'}`}>
+                          {y} {y === 1 ? 'year' : 'years'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button onClick={handleReceiptUpload} disabled={!receiptFile || uploadingReceipt}
+                    className="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white text-sm font-medium transition-colors">
+                    {uploadingReceipt ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-3.5 h-3.5 border border-white/30 border-t-white rounded-full animate-spin" />
+                        Extracting data…
+                      </span>
+                    ) : 'Save Receipt'}
+                  </button>
+                  {receiptFile && <p className="text-white/25 text-xs text-center">AI will extract store, date, and items from the image</p>}
+                </div>
+              ) : receipts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <p className="text-white/30 text-sm">No receipts saved yet.</p>
+                  <p className="text-white/20 text-xs mt-1">Upload your first receipt to get started.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {receipts.map(r => (
+                    <div key={r.id} className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
+                      <div className="flex items-center gap-3 px-4 py-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-medium truncate">{r.storeName || 'Unknown Store'}</p>
+                          <p className="text-white/40 text-xs mt-0.5">
+                            {r.purchaseDate ? new Date(r.purchaseDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown date'}
+                            <span className="mx-1">·</span>
+                            <span className="text-white/25">expires {new Date(r.expiresAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+                          </p>
+                        </div>
+                        <span className="text-emerald-400 font-semibold text-sm tabular-nums shrink-0">
+                          {r.totalAmount != null ? `$${Number(r.totalAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                        </span>
+                        <button onClick={() => setExpandedReceipt(expandedReceipt === r.id ? null : r.id)} className="text-white/30 hover:text-white/60 transition-colors shrink-0">
+                          <svg className={`w-4 h-4 transition-transform ${expandedReceipt === r.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        <button onClick={() => handleDeleteReceipt(r.id)} className="text-white/20 hover:text-red-400 transition-colors shrink-0">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                      {expandedReceipt === r.id && r.itemsJson && (() => {
+                        try {
+                          const items = JSON.parse(r.itemsJson)
+                          if (!Array.isArray(items) || items.length === 0) return null
+                          return (
+                            <div className="border-t border-white/5 px-4 py-3 space-y-1">
+                              {items.map((item, i) => (
+                                <div key={i} className="flex items-center justify-between text-xs">
+                                  <span className="text-white/60">{item.name}{item.qty > 1 ? ` ×${item.qty}` : ''}</span>
+                                  <span className="text-white/40 tabular-nums">{item.price != null ? `$${Number(item.price).toFixed(2)}` : ''}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        } catch { return null }
+                      })()}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

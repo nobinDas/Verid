@@ -30,6 +30,7 @@ public class ClaudeAIService {
     private final GoalRepository goalRepository;
     private final MonthlySummaryRepository summaryRepository;
     private final ChatHistoryRepository chatHistoryRepository;
+    private final ReceiptService receiptService;
 
     private static final String MODEL = "gemini-flash-latest";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MMM d, yyyy");
@@ -163,7 +164,12 @@ public class ClaudeAIService {
             }
         }
 
-        if (summaries.isEmpty() && transactions.isEmpty() && goals.isEmpty()) {
+        String receiptCtx = receiptService.buildChatContext(userId);
+        if (!receiptCtx.isBlank()) {
+            sb.append("\n\nSaved Receipts (scanned by user):\n").append(receiptCtx);
+        }
+
+        if (summaries.isEmpty() && transactions.isEmpty() && goals.isEmpty() && receiptCtx.isBlank()) {
             sb.append("No financial data has been uploaded yet. Encourage the user to upload bank statements to get started.");
         }
 
